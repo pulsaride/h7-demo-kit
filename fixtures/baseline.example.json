@@ -1,0 +1,18 @@
+{
+  "version": "0.1.0",
+  "mu_kappa": 0.08,
+  "k_slack": 0.04,
+  "h_threshold": 0.40,
+  "n_ticks": 1200,
+  "sha256": "pending",
+  "gate_alpha_pass": true,
+  "gate_alpha": {
+    "pass": true,
+    "kappa_max": 0.094,
+    "clip_events": 0,
+    "mu_kappa": 0.08,
+    "n_ticks": 1200,
+    "reason": "Demo baseline — calibrated for workstation demonstration (~2000 CS/100ms idle)",
+    "criteria": "mu_kappa < 0.1, kappa_max < 0.15, clip_events == 0"
+  }
+}
