@@ -1,0 +1,34 @@
+# Minimal RBAC for h7-brain k8s_watcher:
+# - list/watch pods across all namespaces (read-only)
+# - patch pod annotations (to allow operator tooling; watcher itself is read-only)
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: h7-brain-watcher
+  labels:
+    app.kubernetes.io/name: h7-brain
+    app.kubernetes.io/component: k8s-watcher
+rules:
+- apiGroups: [""]
+  resources: ["pods"]
+  verbs: ["get", "list", "watch"]
+- apiGroups: [""]
+  resources: ["pods"]
+  verbs: ["patch", "update"]
+  # Needed only for the demo ns-cookie annotation injection
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: h7-brain-watcher
+  labels:
+    app.kubernetes.io/name: h7-brain
+subjects:
+- kind: User
+  name: kubernetes-admin
+  apiGroup: rbac.authorization.k8s.io
+roleRef:
+  kind: ClusterRole
+  name: h7-brain-watcher
+  apiGroup: rbac.authorization.k8s.io

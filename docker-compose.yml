@@ -1,0 +1,62 @@
+# h7-demo-kit — autonomous stack (no private repo required)
+#
+# Pulls pre-built public images from GHCR:
+#   ghcr.io/pulsaride/h7-monitor  — FastAPI backend + Next.js frontend
+#
+# Usage:
+#   docker compose up -d
+#   open http://localhost:3001        # Next.js fleet dashboard
+#   open http://localhost:8000/agents # h7-monitor REST API
+#
+# To replay an attack demo after `docker compose up -d`:
+#   ./attack-vercel.sh       (requires local Python + h7-brain)
+#   ./launch-k8s-demo.sh     (requires kind + kubectl + docker + h7-brain)
+
+services:
+  h7-monitor:
+    image: ghcr.io/pulsaride/h7-monitor:latest
+    container_name: h7-monitor
+    restart: unless-stopped
+    network_mode: host
+    volumes:
+      - ./run/alerts:/data
+      - h7-monitor-keys:/data/keys
+      - h7-monitor-qr:/data/qr
+    environment:
+      H7_NDJSON_PATH: /data/alerts.ndjson
+      H7_CAL_DIR: /data/certs
+      H7_QR_DIR: /data/qr
+      H7_KEYS_DIR: /data/keys
+      H7_FIXTURE_NDJSON: /app/fixtures/alert-sample.ndjson
+      H7_BRAIN_URL: http://127.0.0.1:7700
+      H7_BRAIN_TIMEOUT: "2.0"
+      # v1.1 threshold heuristics — DEMO values, calibrated so that
+      # `attack-vercel.sh` produces a visible BREACH transition.
+      # Production deployments override these via their own .env file
+      # based on the customer's calibration (see USER-GUIDE.md §Tuning).
+      H7_BREACH_MULT: "3.0"
+      H7_PID_RATIO_THRESHOLD: "5.0"
+      H7_SWITCHES_THRESHOLD: "30000"
+    # Backend on :8000, Next.js frontend served on :3001 by the image entrypoint.
+    # Use `network_mode: host` so h7-brain on the host is reachable at 127.0.0.1:7700.
+
+  sinkhole:
+    image: python:3.11-alpine
+    container_name: h7-demo-sinkhole
+    restart: "no"
+    network_mode: host
+    volumes:
+      - ./scripts/demo-sinkhole.py:/sinkhole.py:ro
+      - ./run/logs:/logs
+    command: >
+      python3 /sinkhole.py --host 127.0.0.1 --port 9999
+      --log /logs/sinkhole.ndjson
+
+  # NOTE: h7-sensor requires --privileged + host PID namespace + eBPF kernel
+  # headers. Use `make up` on the host for production sensor mode.
+  # h7-brain is a host process (not containerised here) to keep kernel namespace
+  # access for the QII Unix socket.
+
+volumes:
+  h7-monitor-keys:
+  h7-monitor-qr:

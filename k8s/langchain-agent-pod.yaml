@@ -1,0 +1,46 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: langchain-agent
+  namespace: default
+  labels:
+    app: payment-gateway-service
+    h7.pulsaride.io/ai-runtime: "true"
+    environment: production
+  annotations:
+    pulsaride.io/is-ai-runtime: "true"
+    pulsaride.io/service-tag: "payment-gateway-service"
+    pulsaride.io/environment: "production"
+    # pulsaride.io/ns-cookie: injected at runtime by launch-k8s-demo.sh
+    # after the pod is Running via: kubectl exec → readlink /proc/self/ns/pid
+spec:
+  containers:
+  - name: langchain-agent
+    image: python:3.12-slim
+    command: ["/bin/sh", "-c"]
+    args:
+    - |
+      python3 - <<'EOF'
+      import time, os, sys
+      print(f"[langchain-agent] starting — pid={os.getpid()}", flush=True)
+      print(f"[langchain-agent] warm  processing queue…", flush=True)
+      prompts = [
+          "Summarise the Q1 report",
+          "What is 2+2?",
+          "Translate bonjour",
+      ]
+      for p in prompts:
+          print(f"[langchain-agent] recv  '{p}'", flush=True)
+          time.sleep(0.4)
+          print(f"[langchain-agent] resp  OK", flush=True)
+      print("[langchain-agent] idle  waiting for next request…", flush=True)
+      while True:
+          time.sleep(1)
+      EOF
+    resources:
+      requests:
+        cpu: "50m"
+        memory: "64Mi"
+      limits:
+        cpu: "200m"
+        memory: "128Mi"
