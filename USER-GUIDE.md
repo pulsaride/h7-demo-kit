@@ -32,7 +32,7 @@ simulator without any kernel, sudo, or Docker.
 git clone https://github.com/pulsaride/h7-demo-kit
 cd h7-demo-kit
 make dev-setup                # creates venv/ + installs pytest
-make test                     # 42 tests, ~12 seconds
+make test                     # 40 tests, ~12 seconds
 ```
 
 Expected output:
@@ -79,9 +79,12 @@ image, feed it real telemetry, and download a CBOR attestation envelope.
 ### Steps
 
 ```bash
-# 1. Pull h7-monitor (public GHCR image) and start the sinkhole
+# 1. Pull h7-monitor (public GHCR image) and start it.
+#    The container serves the FastAPI backend on :8000 and the Next.js
+#    dashboard on :3001. A separate loopback sinkhole is NOT part of this
+#    track; it is only needed for Track C (`make up` brings it up there).
 docker compose up -d
-docker compose ps              # both services should be Up
+docker compose ps              # h7-monitor should be Up
 
 # 2. Stream NDJSON telemetry to the path the container reads
 make stream-telemetry          # writes run/alerts/alerts.ndjson
@@ -95,13 +98,25 @@ In a second terminal:
 # 3. Watch live agents appear in h7-monitor
 curl -s http://127.0.0.1:8000/agents | jq '.[0]'
 
-# 4. Open the Next.js fleet UI
-xdg-open http://127.0.0.1:3001 || open http://127.0.0.1:3001
+# 4. Confirm the Next.js fleet UI is up (headless-friendly — works in CI,
+#    SSH sessions, and automated evaluators like Manus):
+curl -s -o /dev/null -w 'dashboard: HTTP %{http_code}\n' http://127.0.0.1:3001/
+# Expect HTTP 200. The dashboard at :3001 is a Next.js client that proxies
+# /api/* to the FastAPI backend on :8000, so the same agent state can also
+# be read via the proxied route:
+curl -s http://127.0.0.1:3001/api/agents | jq '.[0]'
+
+# 5. If you have a graphical session, open the UI in a browser:
+xdg-open http://127.0.0.1:3001 2>/dev/null \
+  || open http://127.0.0.1:3001 2>/dev/null \
+  || echo "open http://127.0.0.1:3001 in your browser"
 ```
 
 The dashboard shows κ, CUSUM, and severity in real time. Toward the end
 of each 60-second cycle, you will see the agent transition INFO → WARN →
-CRITICAL → INFO as the simulator runs through Phases A, B, C.
+CRITICAL → INFO as the simulator runs through Phases A, B, C. Headless
+evaluators can observe the same transition by polling `/agents` — the
+`status` field cycles through `NOMINAL → ALERT → BREACH → NOMINAL`.
 
 ### Stop
 
@@ -225,16 +240,23 @@ signature.
 ### Single-episode DORA / NIS2 report
 
 Track B and Track C both expose `GET /agents` from h7-monitor on port 8000.
-Each agent's `id` can be used to download a CBOR attestation envelope:
+Each agent's `id` can be used to download a CBOR attestation envelope.
+
+> **About the Bearer token:** `POST /attest/{id}` and `GET /attest/{id}/cbor`
+> are gated by `H7_ATTEST_TOKEN`. The kit's `docker-compose.yml` sets it to
+> the publicly-known demo value `h7-demo-kit-token`. The stack binds to
+> 127.0.0.1 only, so there is no remote risk; rotate this token before
+> exposing h7-monitor on any non-loopback interface. If the env var is
+> unset, both endpoints return HTTP 503 ("POST /attest is disabled").
 
 ```bash
 ENTITY=$(curl -s http://127.0.0.1:8000/agents | jq -r '.[0].id')
 
-curl -X POST -H "Authorization: Bearer h7-e2e-test-token" \
+curl -X POST -H "Authorization: Bearer h7-demo-kit-token" \
     http://127.0.0.1:8000/attest/$ENTITY
 # Returns: {"png_url": "/attest/.../qr.png", "cbor_url": "/attest/.../cbor"}
 
-curl -H "Authorization: Bearer h7-e2e-test-token" \
+curl -H "Authorization: Bearer h7-demo-kit-token" \
     http://127.0.0.1:8000/attest/$ENTITY/cbor \
     -o attestation.cbor
 
@@ -312,7 +334,7 @@ binary. It is the fastest end-to-end correctness check.
 
 ```bash
 make dev-setup                  # one-time: creates venv/ + installs pytest
-make test                       # 42 tests, ~12 s
+make test                       # 40 tests, ~12 s
 ```
 
 What gets tested:
@@ -342,6 +364,8 @@ CI runs the same suite on every push and PR (.github/workflows/e2e.yml).
 | Port 8000 in use | Prior `docker compose up -d` | `docker compose down -v` |
 | `make verify` reports `INVALIDE` | Tamper test ran or baseline was substituted | This is the expected demo behavior — see [Part 4](#part-4--tamper-detection-demo) |
 | Dashboard at `:3001` blank | `docker compose ps` shows h7-monitor exited | `docker compose logs h7-monitor` — usually port conflict or NDJSON path missing |
+| Dashboard at `:3001` "connection refused" | Outdated h7-monitor image without the Next.js server | `docker compose pull && docker compose up -d` (the published image must serve both :8000 and :3001 — versions before 2026-06 only served :8000) |
+| No browser available (headless / CI / SSH-only / AI evaluator) | Cannot use `xdg-open` | Use `curl -sf http://127.0.0.1:3001/` to confirm the dashboard returns HTTP 200, and `curl -s http://127.0.0.1:3001/api/agents` to read agent state through the Next.js `/api/*` proxy. The REST API on `:8000` exposes the same data without the UI layer. |
 | Telemetry not appearing in dashboard | sim writing to wrong path | Use `make stream-telemetry`, which writes the path the container reads |
 
 ---
@@ -351,7 +375,7 @@ CI runs the same suite on every push and PR (.github/workflows/e2e.yml).
 | Path | Purpose |
 |---|---|
 | `Makefile` | Every orchestration target (`make help`) |
-| `docker-compose.yml` | Pulls `ghcr.io/pulsaride/h7-monitor` + runs sinkhole |
+| `docker-compose.yml` | Pulls `ghcr.io/pulsaride/h7-monitor` (Track B). Sinkhole is launched on the host by `make up` (Track C). |
 | `requirements-test.txt` | pytest>=8.0 |
 | `fixtures/baseline.example.json` | Pinned offline-fallback baseline |
 | `fixtures/H7_RELEASE_SIGNING.pub` | Pinned Ed25519 release verification key |

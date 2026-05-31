@@ -249,7 +249,7 @@ status:
 	else
 		echo "sinkhole  : down"
 	fi
-	@echo "alertes   : $$(ls $(ALERTS_DIR) 2>/dev/null | wc -l) sidecar(s) .cal"
+	@echo "alertes   : $$(find $(ALERTS_DIR) -maxdepth 1 -name '*.cal' 2>/dev/null | wc -l) sidecar(s) .cal"
 	@echo "ndjson    : $$(wc -l < $(LOGS_DIR)/alerts.ndjson 2>/dev/null || echo 0) ligne(s)"
 
 stream-test-telemetry: ## Append continuous simulated kappa metrics to the live NDJSON file for UI verification

@@ -37,23 +37,23 @@ services:
       H7_BREACH_MULT: "3.0"
       H7_PID_RATIO_THRESHOLD: "5.0"
       H7_SWITCHES_THRESHOLD: "30000"
+      # Bearer token gating POST /attest/{id} and GET /attest/{id}/cbor.
+      # Unset = endpoints return HTTP 503 "POST /attest is disabled".
+      # The value below is a publicly-known DEMO default; the stack binds
+      # to 127.0.0.1 only, so there is no remote risk. ROTATE this token
+      # before exposing h7-monitor on a non-loopback interface.
+      H7_ATTEST_TOKEN: "h7-demo-kit-token"
     # Backend on :8000, Next.js frontend served on :3001 by the image entrypoint.
     # Use `network_mode: host` so h7-brain on the host is reachable at 127.0.0.1:7700.
 
-  sinkhole:
-    image: python:3.11-alpine
-    container_name: h7-demo-sinkhole
-    restart: "no"
-    network_mode: host
-    volumes:
-      - ./scripts/demo-sinkhole.py:/sinkhole.py:ro
-      - ./run/logs:/logs
-    command: >
-      python3 /sinkhole.py --host 127.0.0.1 --port 9999
-      --log /logs/sinkhole.ndjson
-
-  # NOTE: h7-sensor requires --privileged + host PID namespace + eBPF kernel
-  # headers. Use `make up` on the host for production sensor mode.
+  # NOTE: the loopback sinkhole (127.0.0.1:9999) is started on the host by
+  # `make up` (scripts/demo-sinkhole.py), not as a Docker service. This avoids
+  # an EADDRINUSE collision when running Track C (live eBPF sensor) on top of
+  # Track B (Docker monitor). The Docker monitor reads alerts via the
+  # `./run/alerts` bind mount, independent of the sinkhole.
+  #
+  # h7-sensor requires --privileged + host PID namespace + eBPF kernel headers.
+  # Use `make up` on the host for production sensor mode.
   # h7-brain is a host process (not containerised here) to keep kernel namespace
   # access for the QII Unix socket.
 

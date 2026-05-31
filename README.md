@@ -33,7 +33,7 @@ setup.
 git clone https://github.com/pulsaride/h7-demo-kit
 cd h7-demo-kit
 make dev-setup          # creates venv/ + installs pytest (PEP 668 compatible)
-make test               # 42 tests: schema, baseline canonical hash, telemetry
+make test               # 40 tests: schema, baseline canonical hash, telemetry
 ```
 
 You've now validated:
@@ -51,25 +51,35 @@ AlertCert v1.1 telemetry into it. End result: a live fleet dashboard with
 real BREACH events and a CBOR attestation envelope you can verify offline.
 
 ```bash
-# 1. Pull and start h7-monitor + sinkhole
+# 1. Pull and start h7-monitor (FastAPI :8000 + Next.js dashboard :3001)
 docker compose up -d
+docker compose ps            # confirm h7-monitor is Up
 
-# 2. Stream NDJSON telemetry into the volume the monitor reads
+# 2. Stream NDJSON telemetry into the volume the monitor reads.
+#    NOTE: this command runs until you Ctrl-C it. Let it run for at least
+#    60 s in another terminal so the simulator reaches the BREACH phase.
 make stream-telemetry        # writes run/alerts/alerts.ndjson at 500 ms cadence
 
-# 3. Open the dashboard
-xdg-open http://127.0.0.1:3001         # Next.js fleet UI
-# or hit the API directly:
-curl http://127.0.0.1:8000/agents | jq
+# 3. Confirm the stack is healthy (works headless — no browser needed):
+curl -s -o /dev/null -w 'dashboard: HTTP %{http_code}\n' http://127.0.0.1:3001/
+curl -s -o /dev/null -w 'backend:   HTTP %{http_code}\n' http://127.0.0.1:8000/agents
+curl -s http://127.0.0.1:8000/agents | jq '.[0] | {id, status, kappa, tick}'
+# Expect HTTP 200 on both; the agent should reach status: "BREACH" within ~30 s.
 
-# 4. Verify a CBOR attestation envelope (offline)
-make e2e-full                # generates and verifies a full audit bundle
-                             # NOTE: this target needs the h7-monitor source
-                             #       for uvicorn — use Track A's `make test`
-                             #       for a purely container-only path
+# 4. Open the dashboard in a browser (skip on headless/CI runs):
+xdg-open http://127.0.0.1:3001 2>/dev/null \
+  || open http://127.0.0.1:3001 2>/dev/null \
+  || echo "open http://127.0.0.1:3001 in your browser"
 ```
 
 Stop with `docker compose down -v`.
+
+> **For automated / AI evaluators (Manus, CI, SSH-only):** step 4 is optional.
+> The dashboard at `:3001` is a Next.js client UI that proxies `/api/*` to the
+> FastAPI backend on `:8000`. All agent state, severity transitions, and
+> attestation downloads are reachable directly via the REST API on `:8000`
+> (`/agents`, `/attest/{id}`, `/attest/{id}/cbor`). Use the `curl` commands
+> in step 3 to confirm the stack is healthy without a browser.
 
 ---
 
@@ -159,9 +169,9 @@ h7-demo-kit/
 ├── THREAT-MODEL.md               # adversary profiles ADV-1–4, attack surface
 ├── SECURITY.md                   # Vulnerability Disclosure Policy
 ├── Makefile                      # all orchestration targets (`make help`)
-├── docker-compose.yml            # pulls ghcr.io/pulsaride/h7-monitor + sinkhole
+├── docker-compose.yml            # pulls ghcr.io/pulsaride/h7-monitor (Track B)
 ├── requirements-test.txt         # pytest>=8.0
-├── tests/                        # 42 pytest tests, no kernel/network required
+├── tests/                        # 40 pytest tests, no kernel/network required
 │   ├── test_baseline.py          # canonical hash, idempotence, fail-closed
 │   ├── test_telemetry.py         # AlertCert v1.1 conformance, CLI contract
 │   ├── test_schema.py            # frozen schema + fixture integrity

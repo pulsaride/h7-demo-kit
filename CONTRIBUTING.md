@@ -59,7 +59,7 @@ cd h7-demo-kit
 
 ```bash
 pip install pytest
-make test           # 42 tests, ~12 s, no kernel/binaries/network required
+make test           # 40 tests, ~12 s, no kernel/binaries/network required
 ```
 
 All PRs must pass `make test` before review.
