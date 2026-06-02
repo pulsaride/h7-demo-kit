@@ -33,14 +33,14 @@ setup.
 git clone https://github.com/pulsaride/h7-demo-kit
 cd h7-demo-kit
 make dev-setup          # creates venv/ + installs pytest (PEP 668 compatible)
-make test               # 40 tests: schema, baseline canonical hash, telemetry
+make test               # 40 tests across 4 suites (no kernel, no network)
 ```
 
 You've now validated:
-- the frozen AlertCert v1.1 JSON Schema,
-- the canonical SHA-256 algorithm,
-- the simulator's conformance to the schema,
-- the `seed-offline-baseline` deterministic + fail-closed paths.
+- **`test_schema`** — frozen AlertCert v1.1 JSON Schema + fixture integrity
+- **`test_baseline`** — canonical SHA-256 algorithm, idempotence, fail-closed on missing fixture
+- **`test_telemetry`** — simulator conformance to AlertCert v1.1, CLI contract, kappa bounds
+- **`test_repo_integrity`** — mandatory files present, no broken cross-repo refs, signing key format
 
 ---
 
@@ -99,6 +99,7 @@ make calibrate                # ~2 min, sudo if BTF is present
 
 # 3. Start the sensor + loopback sinkhole.
 make up                       # sudo (CAP_BPF + CAP_SYS_ADMIN)
+make status                   # confirm sensor + sinkhole are up
 make watch                    # follow alerts.ndjson in a second terminal
 
 # 4. Run the noise generator → triggers a κ/CUSUM breach.
@@ -206,7 +207,11 @@ Operational runbooks (live-demo cue card, USB air-gap variant, full DORA/NIS2 ch
 ## Compliance bundle (one shot)
 
 ```bash
-make compliance-bundle   # drift report + RFC 3161 timestamps + audit package
+make gen-audit-package   # signed manifest + every .cal → run/audit-package/
+make gen-drift-report    # 24-h non-drift compliance report → run/reports/
+make gen-crl             # Certificate Revocation List (operator use)
+make validate-crl        # verify CRL signature
+make compliance-bundle   # all of the above in one shot + RFC 3161 timestamps
 ```
 
 Output: `run/audit-package/` (signed manifest + every `.cal` ever emitted)
