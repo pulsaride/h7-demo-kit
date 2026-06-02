@@ -3,6 +3,22 @@
 Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/) ;
 versionnage [SemVer](https://semver.org/lang/fr/).
 
+## [1.1.0] — 2026-06-02
+
+### Changed
+
+- **Binaries** : updated to `pulsaride/p-h7 v0.8.0` — h7-sensor + h7 CLI.
+  Release assets on `pulsaride/h7-demo-kit` refreshed; `make setup` fetches
+  the latest automatically.
+
+- **`attack-vercel.sh`** : aligned with `make attack-vercel` Makefile target
+  (canonical entry point for the CI/CD compromise scenario).
+
+- **`KIT_CONTENTS`** on `pulsaride.com/demo-kit` updated to reflect actual
+  repo structure (`agents/`, `scripts/`, `fixtures/`, `Makefile` targets).
+
+---
+
 ## [0.9.0] — 2026-05-29
 
 ### Added
