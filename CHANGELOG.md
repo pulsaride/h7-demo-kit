@@ -3,6 +3,16 @@
 Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/) ;
 versionnage [SemVer](https://semver.org/lang/fr/).
 
+## [1.3.0] — 2026-06-04
+
+### Changed
+
+- **Binaries** : updated to `pulsaride/p-h7 v1.0.0` (GA) — h7-sensor + h7 CLI.
+  Signed with the rotated v1.0.0 Ed25519 release key; `fixtures/H7_RELEASE_SIGNING.pub`
+  updated accordingly. `make setup` fetches the new binaries automatically.
+
+---
+
 ## [1.2.0] — 2026-06-04
 
 ### Added
