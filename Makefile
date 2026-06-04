@@ -197,8 +197,8 @@ attack-ns: ## ADR-023 §2.3 — PoC 3 : évasion par re-execve dans namespace PI
 		--alert-log "$(LOGS_DIR)/alerts.ndjson"
 
 verify-baseline:
-	@echo "-> vérification cryptographique de la baseline"
-	@"$(H7_BIN)" cal verify "$(BASELINE)" --public-key "$(KEYS_DIR)/h7-cert-issuer.pub"
+	@echo "-> vérification SHA-256 auto-référentielle de la baseline"
+	@python3 scripts/verify-baseline-sha256.py "$(BASELINE)"
 
 verify-alert:
 	@echo "-> vérification cryptographique de toutes les alertes émises"
@@ -354,6 +354,104 @@ verify-attest: ## Offline-verify a downloaded .cbor attestation envelope
 # Mirror a signed Release from the private upstream repo (pulsaride/p-h7) to
 # this public h7-demo-kit Releases. Maintainer-only target.
 # Usage:  make mirror-release TAG=v0.7.2
+# ══════════════════════════════════════════════════════════════════════════════
+# Track D — h7ctl + SIEM integration (ADR-023 §2.1–2.2)
+# Ces targets démontrent les nouvelles features MEP juin 2026.
+# h7ctl doit être installé ou présent dans PATH (make demo-ctl utilise H7CTL_BIN).
+# ══════════════════════════════════════════════════════════════════════════════
+
+H7CTL_BIN ?= h7ctl
+
+.PHONY: demo-ctl demo-evasion demo-siem
+
+## demo-ctl : démontrer h7ctl doctor + calibrate en mode demo-kit (chemins locaux)
+demo-ctl:
+	@echo "══════════════════════════════════════════════════════"
+	@echo "  Track D — h7ctl operator control plane (demo paths)"
+	@echo "══════════════════════════════════════════════════════"
+	@echo ""
+	@echo "── 1. h7ctl doctor (using demo-kit local paths) ──"
+	H7_BASELINE_PATH="$(BASELINE)" \
+	H7_CONFIG_PATH="$(DEMO_CFG)" \
+	H7_SOCK_PATH="$(RUN_DIR)/status.sock" \
+	  "$(H7CTL_BIN)" doctor || true
+	@echo ""
+	@echo "── 2. h7ctl calibrate offline-fallback ──"
+	@echo "   (BTF absent path: seeds from embedded fixture, no sudo needed)"
+	@if [ -f "$(BASELINE)" ]; then \
+		echo "   Baseline already present — deleting for demo..."; \
+		cp "$(BASELINE)" "$(BASELINE).bak"; \
+		rm -f "$(BASELINE)"; \
+	fi
+	H7_BASELINE_PATH="$(BASELINE)" H7_FORCE_OFFLINE=1 \
+	  "$(H7CTL_BIN)" calibrate --duration 1 2>&1 | head -20 || true
+	@if [ -f "$(BASELINE).bak" ] && [ ! -f "$(BASELINE)" ]; then \
+		mv "$(BASELINE).bak" "$(BASELINE)"; \
+	fi
+	@echo ""
+	@echo "── 3. verify-baseline (SHA-256 self-referential check) ──"
+	$(MAKE) --no-print-directory verify-baseline
+
+## demo-evasion : exécuter les 3 PoCs d'évasion adversariale (ADR-023 §2.3)
+demo-evasion:
+	@echo "══════════════════════════════════════════════════════"
+	@echo "  Track D — Adversarial Evasion PoCs (ADR-023 §2.3)"
+	@echo "══════════════════════════════════════════════════════"
+	@echo ""
+	@echo "── PoC 1 — Vercel fork/waitpid burst (make attack-vercel) ──"
+	@echo "   (requires sinkhole: start with 'make up' first)"
+	@if kill -0 $$(cat "$(PID_SINK)" 2>/dev/null) 2>/dev/null; then \
+		$(MAKE) --no-print-directory attack-vercel; \
+	else \
+		echo "   [SKIP] sinkhole not running — run 'make up' to enable PoC 1"; \
+	fi
+	@echo ""
+	@echo "── PoC 2 — prctl thread-name masking ──"
+	$(MAKE) --no-print-directory attack-prctl
+	@echo ""
+	@echo "── PoC 3 — re-execve in PID namespace (requires sudo) ──"
+	$(MAKE) --no-print-directory attack-ns || true
+	@echo ""
+	@echo "── Verify evasion report signature ──"
+	@SIG="docs/ADVERSARIAL-EVASION-REPORT-2026.md.sig"; \
+	RPT="docs/ADVERSARIAL-EVASION-REPORT-2026.md"; \
+	if [ -f "$$SIG" ] && [ -f "$$RPT" ]; then \
+		openssl pkeyutl -verify -rawin -pubin \
+			-inkey "$(KEYS_DIR)/h7-cert-issuer.pub" \
+			-in "$$RPT" -sigfile "$$SIG" && echo "[OK] evasion report signature verified"; \
+	else \
+		echo "[SKIP] report or signature not found at $$RPT / $$SIG"; \
+	fi
+
+## demo-siem : streamer de la télémétrie vers Splunk HEC (nécessite Docker Splunk)
+## Usage: make demo-siem
+##        make demo-siem HEC_URL=https://splunk.corp.example:8088/services/collector/event HEC_TOKEN=<token>
+## Lancer Splunk en local d'abord:
+##   docker run -d --name splunk-h7 -p 8002:8000 -p 8098:8088 \
+##     -e SPLUNK_GENERAL_TERMS=--accept-sgt-current-at-splunk-com \
+##     -e SPLUNK_START_ARGS=--accept-license -e SPLUNK_PASSWORD=Pulsaride2026! \
+##     -e SPLUNK_HEC_TOKEN=h7-demo-token-2026 splunk/splunk:latest
+HEC_URL   ?= https://localhost:8098/services/collector/event
+HEC_TOKEN ?= h7-demo-token-2026
+
+demo-siem:
+	@echo "══════════════════════════════════════════════════════"
+	@echo "  Track D — SIEM Integration (Splunk HEC)"
+	@echo "  HEC_URL=$(HEC_URL)"
+	@echo "══════════════════════════════════════════════════════"
+	@echo ""
+	@echo "── Streaming 50s telemetry (Phase A→B→C) in parallel ──"
+	python3 scripts/sim-live-telemetry.py --duration-sec 50 &
+	python3 scripts/demo-splunk-forward.py \
+		--ndjson "$(LOGS_DIR)/alerts.ndjson" \
+		--hec-url "$(HEC_URL)" \
+		--token "$(HEC_TOKEN)" \
+		--duration 55
+	@echo ""
+	@echo "── SPL queries (open http://localhost:8002) ──"
+	@echo '   sourcetype="pulsaride:h7:alert" severity="CRITICAL" | table _time host kappa cusum_s cert_path | sort - kappa'
+	@echo '   sourcetype="pulsaride:h7:alert" | timechart span=5s avg(kappa)'
+
 mirror-release:
 	@if [ -z "$(TAG)" ]; then \
 		echo "usage: make mirror-release TAG=vX.Y.Z"; \
