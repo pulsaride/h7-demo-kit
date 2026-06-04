@@ -184,6 +184,18 @@ attack-vercel:
 		--beacon-url http://127.0.0.1:9999/exfil
 	@echo "[+] Scénario Vercel exécuté. Lancer 'make verify' pour valider l'AlertCert."
 
+attack-prctl: ## ADR-023 §2.3 — PoC 2 : évasion par masquage du nom de thread (prctl)
+	@echo "[*] PoC 2 — prctl thread-name spoofing + CPU load (ADR-023 §2.3)"
+	@echo "    H7 doit détecter via sched_switch (L1), indépendamment du nom du thread."
+	python3 scripts/attack-prctl-masking.py --duration 60 --workers 4 \
+		--alert-log "$(LOGS_DIR)/alerts.ndjson"
+
+attack-ns: ## ADR-023 §2.3 — PoC 3 : évasion par re-execve dans namespace PID fils
+	@echo "[*] PoC 3 — re-execve in isolated PID namespace (ADR-023 §2.3)"
+	@echo "    Requiert CAP_SYS_ADMIN ou root."
+	sudo python3 scripts/attack-ns-reexecve.py --duration 30 \
+		--alert-log "$(LOGS_DIR)/alerts.ndjson"
+
 verify-baseline:
 	@echo "-> vérification cryptographique de la baseline"
 	@"$(H7_BIN)" cal verify "$(BASELINE)" --public-key "$(KEYS_DIR)/h7-cert-issuer.pub"
