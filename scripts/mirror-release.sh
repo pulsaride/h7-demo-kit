@@ -37,6 +37,7 @@ gh release download "$TAG" --repo "$UPSTREAM_REPO" \
   --pattern "h7-x86_64-unknown-linux-musl.tar.gz" \
   --pattern "h7-sensor-x86_64-unknown-linux-musl.tar.gz" \
   --pattern "h7-aarch64-unknown-linux-musl.tar.gz" \
+  --pattern "h7ctl-linux-amd64.tar.gz" \
   --pattern "SHA256SUMS" \
   --pattern "SHA256SUMS.sig" \
   --pattern "H7_RELEASE_SIGNING.pub"
@@ -57,7 +58,7 @@ openssl pkeyutl -verify -pubin -inkey H7_RELEASE_SIGNING.pub \
 echo "[mirror] verifying tarball checksums"
 # Upstream SHA256SUMS contains multi-platform assets (mac/windows) that this
 # mirror does not download. Validate only the linux artifacts we publish.
-grep -E ' (h7-x86_64-unknown-linux-musl\.tar\.gz|h7-sensor-x86_64-unknown-linux-musl\.tar\.gz|h7-aarch64-unknown-linux-musl\.tar\.gz)$' \
+grep -E ' (h7-x86_64-unknown-linux-musl\.tar\.gz|h7-sensor-x86_64-unknown-linux-musl\.tar\.gz|h7-aarch64-unknown-linux-musl\.tar\.gz|h7ctl-linux-amd64\.tar\.gz)$' \
   SHA256SUMS > SHA256SUMS.linux
 sha256sum -c SHA256SUMS.linux
 
@@ -84,6 +85,7 @@ Usage:
   h7-x86_64-unknown-linux-musl.tar.gz \
   h7-sensor-x86_64-unknown-linux-musl.tar.gz \
   h7-aarch64-unknown-linux-musl.tar.gz \
+  h7ctl-linux-amd64.tar.gz \
   SHA256SUMS \
   SHA256SUMS.sig \
   H7_RELEASE_SIGNING.pub
