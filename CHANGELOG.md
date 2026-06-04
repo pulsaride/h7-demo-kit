@@ -3,6 +3,17 @@
 Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/) ;
 versionnage [SemVer](https://semver.org/lang/fr/).
 
+## [1.5.0] — 2026-06-04
+
+### Changed
+
+- **Binaries** : updated to `pulsaride/p-h7 v1.0.2` — `h7ctl` operator CLI now
+  published as `h7ctl-linux-amd64.tar.gz` (no internal Rust target triple in
+  client-facing filename). `install.sh` now downloads from the public
+  `h7-demo-kit` repo. `make setup` fetches automatically.
+
+---
+
 ## [1.4.0] — 2026-06-04
 
 ### Changed
