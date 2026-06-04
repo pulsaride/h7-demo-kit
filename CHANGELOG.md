@@ -3,6 +3,16 @@
 Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/) ;
 versionnage [SemVer](https://semver.org/lang/fr/).
 
+## [1.4.0] — 2026-06-04
+
+### Changed
+
+- **Binaries** : updated to `pulsaride/p-h7 v1.0.1` — adds `h7ctl` operator CLI
+  (`doctor` / `auth` / `calibrate`) to the signed release assets. Required for
+  `install.sh` to complete successfully. `make setup` fetches automatically.
+
+---
+
 ## [1.3.0] — 2026-06-04
 
 ### Changed
