@@ -78,7 +78,7 @@ Operating envelope: hosts sustaining **≥ 2 000 `sched_switch` events per 100 m
 `h7ctl` is the operator CLI that manages licensing, calibration, and environment diagnostics.
 
 ```bash
-curl -sSfL https://pulsaride.com/install.sh | sh
+curl -sSfL https://pulsaride.com/install.sh | sudo sh
 ```
 
 This script (source: [`public/install.sh`](https://github.com/pulsaride/website/blob/master/public/install.sh)):
