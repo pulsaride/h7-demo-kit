@@ -96,12 +96,26 @@ h7ctl doctor      # checks kernel, BTF, CAP_BPF, JIT, baseline, status socket
 
 `h7ctl doctor` is safe to run at any time — it reads state and prints a colour-coded report; it never writes anything.
 
-### 2.3 Step 2 — Activate your license
+> **Root requirement:** `h7ctl doctor` runs as any user (read-only). All other
+> subcommands (`auth`, `calibrate`) write to root-owned system paths and need
+> `sudo`. The sensor also requires `CAP_BPF` (i.e. `sudo h7-sensor ...`).
+
+### 2.3 Step 2 — Enable eBPF JIT
+
+Required before calibration; the sensor refuses to load without it:
+
+```bash
+sudo sysctl -w kernel.bpf_jit_enable=1
+# Persist across reboots:
+echo 'kernel.bpf_jit_enable=1' | sudo tee /etc/sysctl.d/99-bpf-jit.conf
+```
+
+### 2.4 Step 3 — Activate your license
 
 You receive a license token from Pulsaride (format: `eyJhbGc…`). Activate it:
 
 ```bash
-h7ctl auth "eyJhbGciOiJFZERTQSIsImtpZCI6…"
+sudo h7ctl auth "eyJhbGciOiJFZERTQSIsImtpZCI6…"
 ```
 
 This command:
@@ -119,7 +133,7 @@ This command:
 
 > **Fail-closed guarantee:** `h7-brain` refuses to start without a valid license outside of `dev/ci/test` environments. There is no silent degraded mode.
 
-### 2.4 Step 3 — Install the sensor
+### 2.5 Step 4 — Install the sensor
 
 Download the signed Debian package or the static binary from the [latest release](https://github.com/pulsaride/h7-demo-kit/releases/latest):
 
@@ -142,12 +156,12 @@ openssl pkeyutl -verify -rawin -pubin -inkey H7_RELEASE_SIGNING.pub \
 sha256sum -c SHA256SUMS
 ```
 
-### 2.5 Step 4 — Calibrate the baseline
+### 2.6 Step 5 — Calibrate the baseline
 
 **The workload must be running at production load** before calibration. Calibration takes 120 seconds and computes a host-specific scheduling-entropy baseline.
 
 ```bash
-h7ctl calibrate --duration 120
+sudo h7ctl calibrate --duration 120
 ```
 
 Output:
@@ -160,12 +174,12 @@ Output:
 
 If BTF is absent (embedded system, older kernel, or CI):
 ```bash
-h7ctl calibrate --duration 1   # H7_FORCE_OFFLINE=1 auto-seeded
+sudo h7ctl calibrate --duration 1   # offline fallback, no CAP_BPF needed
 ```
 
 > Recalibrate whenever the workload profile changes significantly (new services, kernel upgrade, major traffic pattern change). Delete `/var/lib/pulsaride-h7/baseline/current.json` to force a fresh calibration.
 
-### 2.6 Step 5 — Start the control plane
+### 2.7 Step 6 — Start the control plane
 
 Create `/etc/pulsaride-h7/.env` (never commit to version control):
 
@@ -197,7 +211,7 @@ curl http://127.0.0.1:7700/health
 # {"status":"ok","ndjson_watcher":{"running":true},"k8s_watcher":{"running":false}}
 ```
 
-### 2.7 Step 6 — Start the monitor (optional)
+### 2.8 Step 7 — Start the monitor (optional)
 
 The monitor provides the compliance dashboard, QR attestation, and SIEM bridge.
 
@@ -213,7 +227,7 @@ docker run -d --name h7-monitor --network=host \
 Dashboard: **http://localhost:3001**
 API docs: **http://localhost:8000/docs**
 
-### 2.8 Step 7 — Run the validation test
+### 2.9 Step 8 — Run the validation test
 
 ```bash
 # With the demo-kit cloned locally:
@@ -357,6 +371,7 @@ All `H7_*` variables with their defaults:
 | `h7ctl doctor` reports `gate_alpha=false` | Workload below 2 000 sched_switch/tick | Use on a production-load host; not a developer workstation |
 | `h7-brain` exits immediately at startup | `H7_LICENSE_KEY` unset or expired | Run `h7ctl auth <token>`; check expiry with `h7ctl auth <token>` again |
 | `h7-brain` exits `EX_NOPERM` | Dev bypass attempted in production profile | Set `H7_ENV=ci` for dev; obtain a real license for production |
+| `h7ctl calibrate` says `Permission denied` | Runs as non-root; baseline dir is root-owned | Use `sudo h7ctl calibrate` |
 | `h7ctl calibrate` says BTF absent | Kernel compiled without BTF | Runs offline-fallback automatically; no action needed |
 | Port `:9999` already in use | Zombie sinkhole process | `ss -ltnp | grep :9999` then kill; or `make down` first |
 | `signature verification failed` on `.cal` | Wrong public key path | Check `H7_PUBKEY_PATH`; key is at `/etc/h7/h7-cert-issuer.pub` (not the license key) |
