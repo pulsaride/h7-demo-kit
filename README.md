@@ -122,18 +122,47 @@ make down                     # purges raw logs, keeps signed alerts
 
 ---
 
+## Track D — h7ctl operator control plane (10 min, no sudo)
+
+This track demonstrates the operator CLI with demo-kit local paths in `run/`.
+It validates control-plane ergonomics (doctor + offline baseline handling) and
+shows SIEM forwarding using the synthetic telemetry stream.
+
+```bash
+# Build h7ctl once (from sibling repo):
+cd ../p-h7 && cargo build -p h7ctl --release && cd ../h7-demo-kit
+
+# 1) h7ctl doctor + forced offline calibration + baseline hash verification
+H7CTL_BIN=../p-h7/target/release/h7ctl make demo-ctl
+
+# 2) Optional L4 evasion scenario chain (requires `make up` first)
+make up
+make demo-evasion
+
+# 3) SIEM path (Splunk HEC local test)
+make demo-siem
+```
+
+Track D does not require writing to `/etc` or `/var/lib`; it uses env overrides:
+`H7_BASELINE_PATH`, `H7_CONFIG_PATH`, `H7_SOCK_PATH`, `H7_PUBKEY_PATH`,
+`H7_LICENSE_TOML`.
+
+---
+
 ## What every track proves
 
-| Capability | Track A | Track B | Track C |
-|---|:---:|:---:|:---:|
-| Frozen AlertCert v1.1 schema | ✓ | ✓ | ✓ |
-| Canonical SHA-256 binding (`baseline_sha256_hex`) | ✓ | ✓ | ✓ |
-| Ed25519-signed `.cal` alerts | — | — | ✓ |
-| One-byte tamper rejection | — | — | ✓ |
-| Live fleet dashboard | — | ✓ | ✓ |
-| CBOR attestation envelope download | — | ✓ | — |
-| Real kernel sched_switch detection | — | — | ✓ |
-| Offline / air-gap operation | ✓ | partial | ✓ (after `make setup`) |
+| Capability | Track A | Track B | Track C | Track D |
+|---|:---:|:---:|:---:|:---:|
+| Frozen AlertCert v1.1 schema | ✓ | ✓ | ✓ | ✓ |
+| Canonical SHA-256 baseline binding | ✓ | ✓ | ✓ | ✓ |
+| Ed25519-signed `.cal` alerts | — | — | ✓ | — |
+| One-byte tamper rejection | — | — | ✓ | — |
+| Live fleet dashboard | — | ✓ | ✓ | — |
+| CBOR attestation envelope download | — | ✓ | — | — |
+| Real kernel sched_switch detection | — | — | ✓ | — |
+| h7ctl local path overrides (`run/`) | — | — | — | ✓ |
+| SIEM forwarding from NDJSON stream | — | — | — | ✓ |
+| Offline / air-gap operation | ✓ | partial | ✓ (after `make setup`) | ✓ |
 
 ---
 

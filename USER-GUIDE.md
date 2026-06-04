@@ -20,6 +20,7 @@ If you have 20 minutes and a Linux machine, read all the way through.
 7. [Running the test suite](#part-7--running-the-test-suite)
 8. [Troubleshooting](#part-8--troubleshooting)
 9. [Key files reference](#part-9--key-files-reference)
+10. [Track D — h7ctl operator control plane](#part-10--track-d--h7ctl-operator-control-plane)
 
 ---
 
@@ -392,6 +393,76 @@ CI runs the same suite on every push and PR (.github/workflows/e2e.yml).
 | `docs/demo/DEMO-SNAPSHOT.md` | Annotated NDJSON telemetry across all three phases |
 | `THREAT-MODEL.md` | Adversary profiles ADV-1–4, attack surface, mitigations |
 | `SECURITY.md` | Vulnerability Disclosure Policy |
+
+---
+
+## Part 10 — Track D — h7ctl operator control plane
+
+Goal: run the operator CLI in demo-kit local mode (no `/etc`, no `/var/lib`),
+verify baseline integrity after offline calibration, and exercise SIEM export.
+
+### Prerequisites
+
+| Component | Minimum | Check |
+|---|---|---|
+| `h7ctl` binary | built from sibling `p-h7` repo | `../p-h7/target/release/h7ctl --help` |
+| Python 3 | for helper scripts | `python3 --version` |
+
+Build once if needed:
+
+```bash
+cd ../p-h7
+cargo build -p h7ctl --release
+cd ../h7-demo-kit
+```
+
+### Step 1 — h7ctl doctor + offline calibration + hash verify
+
+```bash
+H7CTL_BIN=../p-h7/target/release/h7ctl make demo-ctl
+```
+
+What this does:
+
+- Runs `h7ctl doctor` with local overrides:
+  `H7_BASELINE_PATH=run/baseline.json`,
+  `H7_CONFIG_PATH=run/h7-demo.toml`,
+  `H7_SOCK_PATH=run/status.sock`.
+- Forces offline calibration (`H7_FORCE_OFFLINE=1`) to avoid sudo/CAP_BPF.
+- Verifies the baseline self-referential SHA-256 with
+  `scripts/verify-baseline-sha256.py`.
+
+### Step 2 — Optional L4 evasion chain
+
+```bash
+make up
+make demo-evasion
+```
+
+This runs:
+
+- `attack-exfil`
+- `attack-burst`
+- `attack-ptrace`
+
+### Step 3 — SIEM forwarding (Splunk HEC)
+
+```bash
+make demo-siem
+```
+
+Defaults:
+
+- `HEC_URL=https://localhost:8098/services/collector/event`
+- `HEC_TOKEN=h7-demo-token-2026`
+
+Override example:
+
+```bash
+HEC_URL=https://splunk.local:8088/services/collector/event \
+HEC_TOKEN=<token> \
+make demo-siem
+```
 
 ---
 

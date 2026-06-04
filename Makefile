@@ -19,6 +19,7 @@ BASELINE     := $(RUN_DIR)/baseline.json
 DEMO_CFG     := $(RUN_DIR)/h7-demo.toml
 PID_SENSOR   := $(RUN_DIR)/sensor.pid
 PID_SINK     := $(RUN_DIR)/sinkhole.pid
+PID_EXFIL    := $(RUN_DIR)/attacker.pid   # sinkhole "attaquant" hors-allowlist (port 9876)
 
 SENSOR_BIN   := $(BIN_DIR)/h7-sensor
 H7_BIN       := $(BIN_DIR)/h7
@@ -32,11 +33,24 @@ H7_RELEASE_TAG  ?= latest
 # "info" en mode démo (~10 lignes/s, affichage tick par tick).
 # Surcharger : make up LOG_LEVEL=info, ou : make demo-mode up
 LOG_LEVEL ?= warn
+H7CTL_BIN ?= $(CURDIR)/../p-h7/target/release/h7ctl
+H7_STATUS_SOCK ?= $(RUN_DIR)/status.sock
+H7CTL_ENV := H7_BASELINE_PATH="$(BASELINE)" H7_CONFIG_PATH="$(DEMO_CFG)" H7_SOCK_PATH="$(H7_STATUS_SOCK)"
+HEC_URL ?= https://localhost:8098/services/collector/event
+HEC_TOKEN ?= h7-demo-token-2026
 
-.PHONY: help check setup fetch-binaries calibrate up attack attack-vercel verify verify-baseline verify-alert verify-schema down clean status mirror-release reset-alerts watch demo-mode stream-test-telemetry stream-telemetry verify-gate-hardening seed-offline-baseline test-btf-fallback test-kernel-heterogeneous gen-audit-package gen-crl validate-crl ts-harvest gen-drift-report demo-kit-export e2e-full compliance-bundle verify-attest test dev-setup
+.PHONY: help check setup fetch-binaries calibrate up attack attack-vercel attack-exfil attack-burst attack-ptrace verify verify-baseline verify-alert verify-schema down clean status mirror-release reset-alerts watch demo-mode stream-test-telemetry stream-telemetry verify-gate-hardening seed-offline-baseline test-btf-fallback test-kernel-heterogeneous gen-audit-package gen-crl validate-crl ts-harvest gen-drift-report demo-kit-export e2e-full compliance-bundle verify-attest test dev-setup demo-ctl demo-evasion demo-siem docs-setup docs-serve docs-build
+
+DOCS_VENV := $(CURDIR)/.docs-venv
+MKDOCS := $(DOCS_VENV)/bin/mkdocs
 
 help:
 	@echo "Cibles : check fetch-binaries setup calibrate up attack attack-vercel verify-baseline verify-alert verify down clean status reset-alerts watch demo-mode stream-test-telemetry verify-gate-hardening"
+	@echo ""
+	@echo "Nouvelles cibles L4 / Sprint 3 :"
+	@echo "  attack-exfil   — exfiltration HTTP vers destination inconnue (UNKNOWN_DESTINATION)"
+	@echo "  attack-burst   — rafale de connexions (NET_EGRESS_BURST 4σ)"
+	@echo "  attack-ptrace  — ptrace(PTRACE_ATTACH) depuis runtime AI (PTRACE_ATTACK)"
 	@echo ""
 	@echo "Première utilisation (calibration ~2 min) :"
 	@echo "  1. make setup          # télécharge binaires + clés + config TOML -> run/"
@@ -53,11 +67,19 @@ help:
 	@echo "  make watch             # tail -F alerts.ndjson (seulement les alertes)"
 	@echo "  make reset-alerts      # vide run/alerts/ + alerts.ndjson (conserve clés/baseline/binaires)"
 	@echo "  make demo-mode         # régénère la config avec log_level=info (affichage tick/tick)"
+	@echo "  make demo-ctl          # Track D: démonstration h7ctl sur paths locaux run/"
+	@echo "  make demo-evasion      # Track D: enchaîne attaques exfil/burst/ptrace"
+	@echo "  make demo-siem         # Track D: envoie NDJSON vers Splunk HEC local"
 	@echo ""
 	@echo "Variables optionnelles :"
 	@echo "  H7_RELEASE_REPO=$(H7_RELEASE_REPO)"
 	@echo "  H7_RELEASE_TAG=$(H7_RELEASE_TAG)"
 	@echo "  LOG_LEVEL=$(LOG_LEVEL)   # error|warn|info|debug|trace (défaut: warn)"
+	@echo ""
+	@echo "Documentation de référence locale :"
+	@echo "  make docs-setup      # crée .docs-venv/ et installe mkdocs-material"
+	@echo "  make docs-serve      # lance le site sur http://127.0.0.1:8088"
+	@echo "  make docs-build      # build statique dans site/"
 
 check:
 	@command -v python3 >/dev/null || { echo "python3 manquant"; exit 1; }
@@ -170,6 +192,41 @@ attack:
 	python3 scripts/attack-noise.py --duration 60 --workers 4 \
 		--beacon-url http://127.0.0.1:9999/exfil
 
+attack-exfil: ## ADR-019 L4 — exfiltration vers destination inconnue (UNKNOWN_DESTINATION)
+	@echo "[*] Démo exfiltration L4 : connexion vers serveur hors-allowlist (127.0.0.1:9876)"
+	@echo "    Signal H7 attendu : UNKNOWN_DESTINATION → épisode WARNING immédiat"
+	@echo ""
+	@# Démarre un sinkhole "attaquant" sur port 9876 si pas déjà en cours
+	@if [ ! -f "$(PID_EXFIL)" ] || ! kill -0 $$(cat "$(PID_EXFIL)") 2>/dev/null; then \
+		nohup python3 "$(SINKHOLE)" --host 127.0.0.1 --port 9876 \
+			--log "$(LOGS_DIR)/attacker.ndjson" \
+			>"$(LOGS_DIR)/attacker.stderr" 2>&1 & \
+		echo $$! > "$(PID_EXFIL)"; \
+		sleep 0.5; \
+		echo "   serveur attaquant démarré (pid=$$(cat $(PID_EXFIL)), port 9876)"; \
+	else \
+		echo "   serveur attaquant déjà actif (pid=$$(cat $(PID_EXFIL)))"; \
+	fi
+	python3 attacks/attack-exfil.py --attacker-port 9876 --count 5 --interval 1.0
+
+attack-burst: ## ADR-019 L4 — rafale de connexions (NET_EGRESS_BURST 4σ)
+	@echo "[*] Démo burst connexions L4 : $(BURST_RATE) conn/s > seuil mu+4σ"
+	@echo "    Signal H7 attendu : NET_EGRESS_BURST → épisode BREACH"
+	@echo ""
+	python3 attacks/attack-burst.py \
+		--target-port 9999 \
+		--rate $(BURST_RATE) \
+		--baseline-duration 10 \
+		--burst-duration 15
+
+BURST_RATE ?= 60   ## connexions/s pendant la phase burst (surcharger : make attack-burst BURST_RATE=80)
+
+attack-ptrace: ## Sprint 3 R-04 — ptrace(PTRACE_ATTACH) depuis runtime AI (PTRACE_ATTACK)
+	@echo "[*] Démo ptrace attach : appel sys_enter_ptrace depuis le runtime"
+	@echo "    Signal H7 attendu : PTRACE_ATTACK → BREACH (confiance 0.85)"
+	@echo ""
+	python3 attacks/attack-ptrace.py --repeat 1
+
 attack-vercel:
 	@echo "[*] Triggering Vercel-pattern supply-chain attack simulation (2026-04-21)"
 	@if [ ! -f "$(PID_SINK)" ] || ! kill -0 $$(cat "$(PID_SINK)") 2>/dev/null; then \
@@ -221,6 +278,11 @@ down:
 		echo "-> stop sinkhole pid=$$(cat $(PID_SINK))"
 		kill $$(cat "$(PID_SINK)") 2>/dev/null || true
 		rm -f "$(PID_SINK)"
+	fi
+	@if [ -f "$(PID_EXFIL)" ]; then
+		echo "-> stop attacker sinkhole pid=$$(cat $(PID_EXFIL))"
+		kill $$(cat "$(PID_EXFIL)") 2>/dev/null || true
+		rm -f "$(PID_EXFIL)"
 	fi
 	@# Purge logs bruts (bornage disque) : on garde alerts.ndjson + run/alerts/*.cal (preuves).
 	@: > "$(LOGS_DIR)/sensor.stdout" 2>/dev/null || true
@@ -458,3 +520,82 @@ mirror-release:
 		exit 2; \
 	fi
 	bash scripts/mirror-release.sh "$(TAG)"
+
+demo-ctl: ## Track D: h7ctl control plane using local demo-kit paths
+	@echo "===================================================="
+	@echo "  Track D - h7ctl operator control plane"
+	@echo "===================================================="
+	@echo ""
+	@if [ ! -x "$(H7CTL_BIN)" ]; then \
+		echo "[ERREUR] h7ctl introuvable: $(H7CTL_BIN)"; \
+		echo "         Build: cd ../p-h7 && cargo build -p h7ctl --release"; \
+		exit 1; \
+	fi
+	@echo "-- 1. doctor (paths demo-kit) --"
+	@$(H7CTL_ENV) "$(H7CTL_BIN)" doctor || true
+	@echo ""
+	@echo "-- 2. calibrate offline-fallback (no sudo) --"
+	@rm -f "$(BASELINE)"
+	@H7_FORCE_OFFLINE=1 $(H7CTL_ENV) "$(H7CTL_BIN)" calibrate --duration 1 || true
+	@echo ""
+	@echo "-- 3. verify baseline hash --"
+	@$(MAKE) --no-print-directory verify-baseline
+
+demo-evasion: ## Track D: run L4 evasion scenarios against a running stack
+	@echo "===================================================="
+	@echo "  Track D - Evasion Scenarios (L4)"
+	@echo "===================================================="
+	@if [ ! -f "$(PID_SINK)" ] || ! kill -0 $$(cat "$(PID_SINK)") 2>/dev/null; then \
+		echo "[ERREUR] stack non démarrée. Lance d'abord: make up"; \
+		exit 1; \
+	fi
+	@$(MAKE) --no-print-directory attack-exfil
+	@$(MAKE) --no-print-directory attack-burst
+	@$(MAKE) --no-print-directory attack-ptrace
+
+demo-siem: ## Track D: stream telemetry and forward to Splunk HEC
+	@echo "===================================================="
+	@echo "  Track D - SIEM Integration (Splunk HEC)"
+	@echo "  HEC_URL=$(HEC_URL)"
+	@echo "===================================================="
+	@touch "$(LOGS_DIR)/alerts.ndjson"
+	@python3 scripts/demo-splunk-forward.py \
+		--ndjson "$(LOGS_DIR)/alerts.ndjson" \
+		--hec-url "$(HEC_URL)" \
+		--token "$(HEC_TOKEN)" \
+		--duration 55 &
+	@FWD_PID=$$!; \
+	python3 scripts/sim-live-telemetry.py \
+		--output "$(LOGS_DIR)/alerts.ndjson" \
+		--duration-sec 50 \
+		--interval-ms 500; \
+	wait $$FWD_PID
+	@echo ""
+	@echo "SPL query (example):"
+	@echo "  sourcetype=\"pulsaride:h7:alert\" severity=\"CRITICAL\" | table _time host kappa cusum_s cert_path | sort - kappa"
+
+docs-setup: ## Create .docs-venv/ and install MkDocs dependencies
+	@if [ -d "$(DOCS_VENV)" ] && [ ! -x "$(DOCS_VENV)/bin/pip" ]; then \
+		echo "[docs-setup] found partial .docs-venv/, recreating"; \
+		rm -rf "$(DOCS_VENV)"; \
+	fi
+	@if [ ! -x "$(DOCS_VENV)/bin/pip" ]; then \
+		echo "[docs-setup] creating .docs-venv/..."; \
+		python3 -m venv "$(DOCS_VENV)"; \
+	else \
+		echo "[docs-setup] .docs-venv/ already healthy"; \
+	fi
+	"$(DOCS_VENV)/bin/pip" install --quiet -r requirements-docs.txt
+	@echo "✓ docs-setup complete"
+
+docs-serve: ## Serve the local reference docs at http://127.0.0.1:8088
+	@if [ ! -x "$(MKDOCS)" ]; then \
+		$(MAKE) --no-print-directory docs-setup; \
+	fi
+	"$(MKDOCS)" serve -a 127.0.0.1:8088
+
+docs-build: ## Build the static reference docs in site/
+	@if [ ! -x "$(MKDOCS)" ]; then \
+		$(MAKE) --no-print-directory docs-setup; \
+	fi
+	"$(MKDOCS)" build --strict

@@ -3,6 +3,32 @@
 Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/) ;
 versionnage [SemVer](https://semver.org/lang/fr/).
 
+## [1.2.0] — 2026-06-04
+
+### Added
+
+- **Track D — h7ctl operator control plane** in docs and Make targets:
+  - `make demo-ctl`
+  - `make demo-evasion`
+  - `make demo-siem`
+- **`scripts/verify-baseline-sha256.py`**: validates self-referential SHA-256
+  for both live-calibrated and offline-seeded baseline formats.
+- **`scripts/demo-splunk-forward.py`**: tails NDJSON telemetry and forwards
+  events to Splunk HEC.
+
+### Changed
+
+- **`verify-baseline`** target now uses local baseline hash verification script
+  (does not require `h7` CLI verification path).
+- **README / USER-GUIDE** now document Track D usage and local-path h7ctl mode.
+
+### Notes
+
+- Track D is designed for local evaluation paths (`run/`) and avoids requiring
+  writes under `/etc` and `/var/lib`.
+
+---
+
 ## [1.1.0] — 2026-06-02
 
 ### Changed

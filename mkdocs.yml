@@ -1,0 +1,39 @@
+site_name: H7 Demo Kit Reference
+site_description: Public reference documentation for Pulsaride H7 Demo Kit
+site_url: https://example.local/h7-demo-kit/
+repo_name: pulsaride/h7-demo-kit
+repo_url: https://github.com/pulsaride/h7-demo-kit
+edit_uri: edit/main/
+
+theme:
+  name: material
+  language: en
+  features:
+    - navigation.tabs
+    - navigation.sections
+    - navigation.top
+    - content.code.copy
+    - search.highlight
+  palette:
+    - scheme: default
+      primary: teal
+      accent: amber
+
+markdown_extensions:
+  - admonition
+  - toc:
+      permalink: true
+  - tables
+  - pymdownx.superfences
+  - pymdownx.inlinehilite
+  - pymdownx.details
+
+docs_dir: site-docs
+
+nav:
+  - Overview: index.md
+  - Quickstart: quickstart.md
+  - Evaluation Tracks: tracks.md
+  - Technical Reference: reference.md
+  - Compliance and Governance: compliance.md
+  - Changelog: changelog.md
