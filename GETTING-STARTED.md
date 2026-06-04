@@ -100,9 +100,10 @@ h7ctl doctor      # checks kernel, BTF, CAP_BPF, JIT, baseline, status socket
 > subcommands (`auth`, `calibrate`) write to root-owned system paths and need
 > `sudo`. The sensor also requires `CAP_BPF` (i.e. `sudo h7-sensor ...`).
 
-### 2.3 Step 2 — Enable eBPF JIT
+### 2.3 Step 2 — Enable eBPF JIT (kernel < 5.18 only)
 
-Required before calibration; the sensor refuses to load without it:
+On kernel ≥ 5.18 (including 6.x) BPF JIT is always-on — skip this step.
+On older kernels, `h7ctl doctor` will report `[FAIL] eBPF JIT disabled`:
 
 ```bash
 sudo sysctl -w kernel.bpf_jit_enable=1
