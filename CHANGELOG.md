@@ -3,6 +3,21 @@
 Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/) ;
 versionnage [SemVer](https://semver.org/lang/fr/).
 
+## [1.7.0] — 2026-06-05
+
+### Changed
+
+- **Binaries** : updated to `pulsaride/p-h7 v1.0.6`.
+- **`h7ctl deploy`** now routes through `pulsaride.com/api/exchange-image-token`
+  (backend URL no longer exposed in the binary; `curl -L` follows the apex→www
+  redirect), shows a download progress bar, and is idempotent
+  (`compose up --force-recreate`, so re-runs no longer need a manual `docker rm`).
+- **h7-brain image halved** — `~124 MB → ~65 MB` download. scipy is now an
+  optional accelerator (numpy dense fallback already wired); pip/wheel, test
+  suites and `.so` debug symbols stripped from the runtime image.
+
+---
+
 ## [1.6.0] — 2026-06-05
 
 ### Added
