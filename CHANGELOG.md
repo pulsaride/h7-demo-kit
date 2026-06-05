@@ -3,6 +3,21 @@
 Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/) ;
 versionnage [SemVer](https://semver.org/lang/fr/).
 
+## [1.6.0] — 2026-06-05
+
+### Added
+
+- **`h7ctl deploy`** (p-h7 v1.0.4) — license-gated private-image delivery
+  (Option B2): exchanges the license token for a short-lived presigned URL,
+  downloads + SHA-256-verifies the private `h7-brain` image, `docker load`s it,
+  and starts the stack. The brain image is never pulled from a public registry.
+
+### Changed
+
+- **Binaries** : updated to `pulsaride/p-h7 v1.0.4`.
+
+---
+
 ## [1.5.0] — 2026-06-04
 
 ### Changed
